@@ -1,0 +1,8 @@
+{
+  "model": "bert-base-uncased",
+  "split": "unseen_phrasing_split",
+  "accuracy": 0.7435,
+  "macro_f1": 0.7328,
+  "train_minutes": 2.74,
+  "device": "cuda"
+}

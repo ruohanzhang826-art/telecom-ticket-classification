@@ -17,13 +17,14 @@ This project asks: **how much of that routing can a text classifier do, and how 
 | Majority class (baseline) | 0.061 | 0.058 | 0.061 |
 | TF-IDF + Random Forest | 0.965 | 0.970 | 0.523 |
 | **TF-IDF (word + char) + Logistic Regression** | **0.969** | **0.974** | **0.636** |
-| BERT fine-tuning (extension) | — | — | *script provided, see below* |
+| **BERT fine-tuning** (`bert-base-uncased`, 3 epochs) | **0.969** | — | **0.733** |
 
-Three findings matter more than the headline number:
+Four findings matter more than the headline number:
 
 1. **The model is right more often than the historical labels.** On the random split the model makes 36 errors out of 1,200. In **all 36** the ticket text clearly belongs to the department the model predicted — the *label* was wrong (the dataset contains 3% mis-routed tickets, as real logs do). A routing model doubles as a tool to find mis-routed tickets.
 2. **High accuracy on a random split is partly memorisation.** When whole phrasing patterns are held out of training (`unseen_phrasing_split`), macro-F1 drops from 0.97 to 0.64. This is the realistic risk when a new product launches or new agents write differently.
 3. **A confidence threshold turns a 65% model into a useful one.** On unseen phrasings, auto-routing only the most confident 41% of tickets keeps accuracy ≥ 90%; the rest go to manual triage.
+4. **BERT closes part of the gap on new wording.** Fine-tuned BERT ties the TF-IDF model on the random split (both 0.969 — the remaining errors are the mis-labelled tickets) but improves unseen-phrasing macro-F1 from 0.636 to **0.733** (+10 points), because it understands that differently worded tickets can mean the same thing.
 
 ![Coverage vs accuracy](reports/figures/coverage_vs_accuracy.png)
 
@@ -84,7 +85,16 @@ python -m src.ticket_routing.bert_finetune --split unseen_phrasing_split   # GPU
 python -m src.ticket_routing.bert_finetune --smoke-test                    # offline CPU check of the loop
 ```
 
-> **Status:** the training loop is tested offline with `--smoke-test` (a tiny randomly initialised BERT — not a meaningful accuracy number). The full pretrained run has not been reported here yet; results will be saved to `reports/bert_<split>.json`.
+**Results** (Google Colab, Tesla T4 GPU, ~3 minutes per run; [`reports/bert_unseen_phrasing_split.json`](reports/bert_unseen_phrasing_split.json), [`reports/bert_random_split.json`](reports/bert_random_split.json)):
+
+| Split | TF-IDF + LogReg<br>macro-F1 | BERT<br>macro-F1 | BERT<br>accuracy |
+|---|---:|---:|---:|
+| Random split | 0.969 | 0.969 | 0.970 |
+| Unseen phrasing split | 0.636 | **0.733** | 0.744 |
+
+On familiar phrasing the cheap model is already as good as BERT, at about 0.1 ms per ticket on a CPU. BERT pays off where wording is new. A practical design is TF-IDF first, with BERT (or a human) for low-confidence tickets.
+
+Reproduce in one click: open [`notebooks/bert_colab.ipynb`](notebooks/bert_colab.ipynb) in Google Colab, select a T4 GPU and choose **Run all**. Single run with seed 42; scores can move by about ±1 point between seeds.
 
 ## Quick start
 
@@ -119,9 +129,10 @@ Training all models on all three splits takes about 30 seconds on a laptop CPU; 
 │   ├── models.py               # baseline pipelines
 │   ├── train.py                # training, model selection, evaluation, reports
 │   ├── predict.py              # CLI with confidence threshold → MANUAL_TRIAGE
-│   ├── bert_finetune.py        # BERT extension
+│   ├── bert_finetune.py        # BERT fine-tuning
 │   └── plotting.py
-├── reports/                    # metrics.json, figures, top features, error examples
+├── notebooks/bert_colab.ipynb  # one-click BERT run on Colab GPU
+├── reports/                    # metrics, BERT results, figures, top features, error examples
 └── tests/
 ```
 
@@ -129,7 +140,7 @@ Training all models on all three splits takes about 30 seconds on a laptop CPU; 
 
 - **Synthetic data.** Template-based text is more regular than real tickets, which is why the random split looks almost solved. The unseen-phrasing split is the more honest estimate. The natural next step is to test on real, anonymised tickets.
 - **Only text is used.** Real routing also depends on structured fields (product, channel, customer type) and on rules (e.g. outage reports in an area go straight to network operations).
-- **Next:** report the pretrained BERT run; add multilingual input (Chinese / Japanese tickets, e.g. with a multilingual encoder); calibrate probabilities so the threshold maps to a target accuracy; active learning on the `MANUAL_TRIAGE` queue.
+- **Next:** add multilingual input (Chinese / Japanese tickets, e.g. with a multilingual encoder); calibrate probabilities so the threshold maps to a target accuracy; active learning on the `MANUAL_TRIAGE` queue.
 
 ## Author
 
